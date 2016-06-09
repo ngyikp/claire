@@ -1,7 +1,17 @@
 // Claire
 /* global define */
-define(['request'], function (Request) {
+define(['request', 'mobx'], function (Request, mobx) {
   'use strict';
+  window.mobx = mobx;
+  var optionsState = window.optionsState = mobx.observable({
+    debug: localStorage.debug_logging === 'yes',
+    hideGuide: localStorage.hide_guide === 'yes'
+  });
+
+  mobx.autorun(function () {
+    localStorage.debug_logging = optionsState.debug ? 'yes' : 'no'; // eslint-disable-line camelcase
+    localStorage.hide_guide = optionsState.hideGuide ? 'yes' : 'no'; // eslint-disable-line camelcase
+  });
 
   // a mapping of tab IDs to window.requests
   window.requests = {};
@@ -62,4 +72,3 @@ define(['request'], function (Request) {
     delete window.requests[tabId];
   });
 });
-

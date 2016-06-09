@@ -25,7 +25,7 @@
       "chrome"
     ],
     "ignores": [
-      "source/{airports,jquery-1.9.1.min,require}.js"
+      "source/{airports,jquery-1.9.1.min,require,mobx}.js"
     ],
     "space": true
   }

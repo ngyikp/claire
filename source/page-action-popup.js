@@ -1,6 +1,9 @@
 (function () {
   'use strict';
   /* global $ */
+  var backgroundPage = chrome.extension.getBackgroundPage();
+  var mobx = backgroundPage.mobx;
+  var optionsState = backgroundPage.optionsState;
   // get the current tab's ID and extract request info
   // from the extension object
   var queryInfo = {
@@ -8,9 +11,13 @@
     windowId: chrome.windows.WINDOW_ID_CURRENT
   };
 
-  if (localStorage.hide_guide === 'yes') {
-    $('#claireInfoImage').hide();
-  }
+  var dispose = mobx.autorun(function () {
+    if (optionsState.hideGuide) {
+      $('#claireInfoImage').hide();
+    } else {
+      $('#claireInfoImage').show();
+    }
+  });
 
   $('.copy-button').on('click', function (evt) {
     var $el = $(this);
@@ -57,4 +64,8 @@
       $('#railgun').attr('hidden', true);
     }
   });
+
+  window.onunload = function () {
+    dispose();
+  };
 })();

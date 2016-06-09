@@ -1,24 +1,26 @@
 (function () {
   'use strict';
-  var debugLogCheckbox = document.getElementById('debug_log_checkbox');
+  var backgroundPage = chrome.extension.getBackgroundPage();
+  var optionsState = backgroundPage.optionsState;
+  var mobx = backgroundPage.mobx;
 
-  // check current debug state flag and change the checkbox accordingly
-  debugLogCheckbox.checked = localStorage.debug_logging === 'yes';
+  var debugCheckbox = document.getElementById('debug_log_checkbox');
+  var claireCheckbox = document.getElementById('claire_guide');
 
-  // attach a click event to the debug log preference checkbox
-  var debugCheckboxClicked = function (e) {
-    localStorage.debug_logging = e.target.checked ? 'yes' : 'no'; // eslint-disable-line camelcase
-  };
-  debugLogCheckbox.onclick = debugCheckboxClicked;
+  var dispose = mobx.autorun(function () {
+    debugCheckbox.checked = optionsState.debug;
+    claireCheckbox.checked = optionsState.hideGuide;
+  });
 
-  var claireGuideCheckbox = document.getElementById('claire_guide');
-
-  claireGuideCheckbox.checked = localStorage.hide_guide === 'yes';
-
-  var claireGuideClicked = function (e) {
-    localStorage.hide_guide = e.target.checked ? 'yes' : 'no'; // eslint-disable-line camelcase
+  debugCheckbox.onclick = function (e) {
+    optionsState.debug = e.target.checked;
   };
 
-  claireGuideCheckbox.onclick = claireGuideClicked;
+  claireCheckbox.onclick = function (e) {
+    optionsState.hideGuide = e.target.checked;
+  };
+
+  window.onunload = function () {
+    dispose();
+  };
 })();
-
