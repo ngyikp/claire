@@ -10,13 +10,78 @@
     active: true,
     windowId: chrome.windows.WINDOW_ID_CURRENT
   };
+  var dispose = function () {};
 
-  var dispose = mobx.autorun(function () {
-    if (optionsState.hideGuide) {
-      $('#claireInfoImage').hide();
-    } else {
-      $('#claireInfoImage').show();
-    }
+  chrome.tabs.query(queryInfo, function (tabs) {
+    var tabID = tabs[0].id;
+    dispose = mobx.autorun(function () {
+      if (optionsState.hideGuide) {
+        $('#claireInfoImage').hide();
+      } else {
+        $('#claireInfoImage').show();
+      }
+
+      var request = backgroundPage.requests.get(tabID);
+
+      $('#ip').val(request.IP);
+
+      $('#claireInfoImage img').attr('src', request.guideIcon);
+
+      // show the Ray ID & location
+      if (request.isCloudFlare) {
+        var loc = request.location;
+        $('#rayID').val(request.rayID);
+        $('#locationCode').text(loc.code);
+
+        if (loc.city && loc.country) {
+          $('#locationName').text(loc.city + ', ' + loc.country);
+        } else {
+          $('#locationName').text('');
+        }
+
+        var traceURL = new URL(request.url);
+        traceURL.pathname = '/cdn-cgi/trace';
+        $('#traceURL').attr('href', traceURL);
+      } else {
+        $('#ray').attr('hidden', true);
+        $('#loc').attr('hidden', true);
+        $('#actions').attr('hidden', true);
+      }
+
+      // show Railgun related info
+      if (request.isViaRailgun) {
+        var railgun = request.railgun;
+
+        switch (railgun.state) {
+          case 'compressed':
+          case 'stream':
+            $('#railgunID').text(railgun.id).show();
+
+            if (railgun.isCompressed) {
+              $('#railgunCompression').text(100 - railgun.compressionRatio + '%');
+            } else {
+              $('#railgunCompression').text('stream');
+            }
+            $('#railgunTime').text(railgun.originTime + 'sec').show();
+            break;
+          case 'error':
+          case 'normal':
+            $('#railgunID').text(railgun.id).show();
+            $('#railgunCompression').text(railgun.state);
+            $('#railgunTime').hide();
+            break;
+          case 'direct':
+            $('#railgunID').hide();
+            $('#railgunCompression').text('direct');
+            $('#railgunTime').hide();
+            break;
+          default:
+            $('#railgun').attr('hidden', true);
+        }
+      } else {
+        $('#railgun').attr('hidden', true);
+      }
+    });
   });
 
   $('.copy-button').on('click', function (evt) {
@@ -28,41 +93,6 @@
     document.execCommand('copy');
 
     evt.preventDefault();
-  });
-
-  chrome.tabs.query(queryInfo, function (tabs) {
-    var tabID = tabs[0].id;
-    // get the extension's window object
-    var extensionWindow = chrome.extension.getBackgroundPage();
-    var request = extensionWindow.requests[tabID];
-
-    $('#ip').val(request.getServerIP());
-
-    $('#claireInfoImage img').attr('src', request.getPopupPath());
-
-    // show the Ray ID & location
-    if (request.servedByCloudFlare()) {
-      $('#rayID').val(request.getRayID());
-      $('#locationCode').text(request.getCloudFlareLocationCode());
-      $('#locationName').text(request.getCloudFlareLocationName());
-      $('#traceURL').attr('href', request.getCloudFlareTrace());
-    } else {
-      $('#ray').attr('hidden', true);
-      $('#loc').attr('hidden', true);
-      $('#actions').attr('hidden', true);
-    }
-
-    // show Railgun related info
-    if (request.servedByRailgun()) {
-      var railgunMetaData = request.getRailgunMetaData();
-      $('#railgunID').text(railgunMetaData.id);
-      if (!railgunMetaData.normal) {
-        $('#railgunCompression').text(railgunMetaData.compression);
-        $('#railgunTime').text(railgunMetaData.time);
-      }
-    } else {
-      $('#railgun').attr('hidden', true);
-    }
   });
 
   window.onunload = function () {

@@ -1,115 +1,73 @@
 /* global define */
-define(['airports'], function (airports) {
+define(['airports', 'mobx', 'railgun'], function (airports, mobx, Railgun) {
   'use strict';
 
   // the Request object, contains information about a request
   var Request = function (details) {
-    this.details = details;
-    this.headersRaw = details.responseHeaders;
+    this.id = details.requestId;
+    this.fromCache = details.fromCache;
+    this.tabId = details.tabId;
+    this.url = details.url;
+    this.IP = details.ip;
 
-    // headers will be stored as name: value pairs (all names will be upper case)
-    this.headers = {};
-
-    // weather the request object knows about the SPDY status or not
-    // this status is available in the context of the page, requires message passing
-    // from the extension to the page
-    this.hasConnectionInfo = false;
-    this.SPDY = false;
-    this.connectionType = null;
-
-    this.preProcessHeaders();
-  };
-
-  // convert the headers array into an object and upcase all names
-  // (warning! will preserve only last of multiple headers with same name)
-  Request.prototype.preProcessHeaders = function () {
-    this.headersRaw.forEach(function (header) {
-      this.headers[header.name.toUpperCase()] = header.value;
-    }, this);
-
-    if ('CF-RAILGUN' in this.headers) {
-      this.processRailgunHeader();
-    }
-  };
-
-  Request.prototype.processRailgunHeader = function () {
-    var railgunHeader = this.headers['CF-RAILGUN'];
-
-    this.railgunMetaData = {};
-
-    if (typeof railgunHeader !== 'string') {
-      return this.railgunMetaData;
-    }
-
-    // Railgun header can be in one of two formats
-    // one of them will have the string "normal"
-    var railgunNormal = railgunHeader.indexOf('normal') !== -1;
-
-    var parts = railgunHeader.split(' ');
-
-    var flagsBitset = 0;
-
-    this.railgunMetaData.normal = railgunNormal;
-    this.railgunMetaData.id = parts[0];
-    if (railgunNormal) {
-      flagsBitset = parseInt(parts[1], 10);
-      this.railgunMetaData.version = parts[3];
-    } else {
-      this.railgunMetaData.compression = (100 - parts[1]) + '%';
-      this.railgunMetaData.time = parts[2] + 'sec';
-      flagsBitset = parseInt(parts[3], 10);
-      this.railgunMetaData.version = parts[4];
-    }
-
-    // decode the flags bitest
-    var railgunFlags = {
-      FLAG_DOMAIN_MAP_USED: {
-        position: 0x01,
-        message: 'map.file used to change IP'
+    mobx.extendObservable(this, {
+      responseHeaders: details.responseHeaders,
+      hasConnectionInfo: false,
+      SPDY: false,
+      connectionType: null,
+      headers: function () {
+        return this.responseHeaders.reduce(function (headers, header) {
+          headers[header.name.toUpperCase()] = header.value;
+          return headers;
+        }, {});
       },
-      FLAG_DEFAULT_IP_USED: {
-        position: 0x02,
-        message: 'map.file default IP used'
-      },
-      FLAG_HOST_CHANGE: {
-        position: 0x04,
-        message: 'Host name change'
-      },
-      FLAG_REUSED_CONNECTION: {
-        position: 0x08,
-        message: 'Existing connection reused'
-      },
-      FLAG_HAD_DICTIONARY: {
-        position: 0x10,
-        message: 'Railgun sender sent dictionary'
-      },
-      FLAG_WAS_CACHED: {
-        position: 0x20,
-        message: 'Dictionary found in memcache'
-      },
-      FLAG_RESTART_CONNECTION: {
-        position: 0x40,
-        message: 'Restarted broken origin connection'
-      }
-    };
+      railgun: function () {
+        var header = this.headers['CF-RAILGUN'];
 
-    var messages = [];
-
-    for (var flagKey in railgunFlags) {
-      if (railgunFlags.hasOwnProperty(flagKey)) {
-        var flag = railgunFlags[flagKey];
-        if ((flagsBitset & flag.position) !== 0) {
-          messages.push(flag.message);
+        if (header) {
+          return new Railgun(this.headers['CF-RAILGUN']);
         }
-      }
-    }
+        return null;
+      },
+      rayID: function () {
+        return this.headers['CF-RAY'].split('-')[0];
+      },
+      isCloudFlare: function () {
+        return this.headers.hasOwnProperty('SERVER') && this.headers.SERVER === 'cloudflare-nginx';
+      },
+      isViaRailgun: function () {
+        return this.headers.hasOwnProperty('CF-RAILGUN');
+      },
+      isSPDY: function () {
+        return this.SPDY && this.connectionType.match(/^spdy/);
+      },
+      isH2: function () {
+        return this.SPDY && this.connectionType === 'h2';
+      },
+      isIPv6: function () {
+        return this.IP && this.IP.indexOf(':') !== -1;
+      },
+      location: mobx.asStructure(function () {
+        var code = this.headers['CF-RAY'].split('-')[1];
+        var airport = airports[code] || {};
 
-    this.railgunMetaData.flags = flagsBitset;
-    this.railgunMetaData.messages = messages;
+        return {
+          code: code,
+          city: airport.city,
+          country: airport.country
+        };
+      }),
+      pageActionIcon: function () {
+        return this.getImagePath('images/claire-3-');
+      },
+      guideIcon: function () {
+        return this.getImagePath('images/claire-3-popup-');
+      }
+    });
   };
 
   Request.prototype.queryConnectionInfoAndSetIcon = function () {
-    var tabID = this.details.tabId;
+    var tabID = this.tabId;
     if (this.hasConnectionInfo) {
       this.setPageActionIconAndPopup();
     } else {
@@ -122,13 +80,13 @@ define(['airports'], function (airports) {
           return;
         }
 
-        var request = window.requests[tabID];
+        var request = window.requests.get(tabID);
         request.setConnectionInfo(csMsgResponse);
         request.setPageActionIconAndPopup();
       };
 
       try {
-        chrome.tabs.sendMessage(this.details.tabId, csMessageData, csMessageCallback);
+        chrome.tabs.sendMessage(this.tabId, csMessageData, csMessageCallback);
       } catch (e) {
         console.log('caught exception when sending message to content script');
         console.log(chrome.extension.lastError());
@@ -137,123 +95,43 @@ define(['airports'], function (airports) {
     }
   };
 
-  // check if the server header matches 'cloudflare-nginx'
-  Request.prototype.servedByCloudFlare = function () {
-    return ('SERVER' in this.headers) && (this.headers.SERVER === 'cloudflare-nginx');
-  };
-
-  Request.prototype.servedByRailgun = function () {
-    return 'CF-RAILGUN' in this.headers;
-  };
-
-  Request.prototype.servedOverSPDY = function () {
-    return this.SPDY && this.connectionType.match(/^spdy/);
-  };
-
-  Request.prototype.servedOverH2 = function () {
-    return this.SPDY && this.connectionType === 'h2';
-  };
-
-  Request.prototype.ServedFromBrowserCache = function () {
-    return this.details.fromCache;
-  };
-
-  // RAY ID header format: CF-RAY:f694c6892660106-DFW
-  Request.prototype.getRayID = function () {
-    return this.headers['CF-RAY'].split('-')[0];
-  };
-
-  Request.prototype.getCloudFlareLocationCode = function () {
-    return this.headers['CF-RAY'].split('-')[1];
-  };
-
-  Request.prototype.getCloudFlareLocationData = function () {
-    var locationCode = this.getCloudFlareLocationCode();
-    return airports[locationCode];
-  };
-
-  Request.prototype.getCloudFlareLocationName = function () {
-    var airportData = this.getCloudFlareLocationData();
-    if (airportData) {
-      return airportData.city + ', ' + airportData.country;
-    }
-
-    return this.getCloudFlareLocationCode();
-  };
-
-  Request.prototype.getCloudFlareTrace = function () {
-    var traceURL = new URL(this.details.url);
-    traceURL.pathname = '/cdn-cgi/trace';
-    return traceURL.toString();
-  };
-
-  Request.prototype.getTabID = function () {
-    return this.details.tabId;
-  };
-
-  Request.prototype.getRequestURL = function () {
-    return this.details.url;
-  };
-
-  Request.prototype.getRailgunMetaData = function () {
-    return this.railgunMetaData;
-  };
-
-  Request.prototype.getServerIP = function () {
-    return this.details.ip ? this.details.ip : '';
-  };
-
-  Request.prototype.isv6IP = function () {
-    return this.getServerIP().indexOf(':') !== -1;
-  };
-
-  // figure out what the page action should be based on the
-  // features we detected in this request
-  Request.prototype.getPageActionPath = function () {
-    return this.getImagePath('images/claire-3-');
-  };
-
-  Request.prototype.getPopupPath = function () {
-    return this.getImagePath('images/claire-3-popup-');
-  };
-
   Request.prototype.getImagePath = function (basePath) {
     var iconPathParts = [];
 
-    if (this.servedByCloudFlare()) {
+    if (this.isCloudFlare) {
       iconPathParts.push('on');
     } else {
       iconPathParts.push('off');
     }
 
-    if (this.servedOverSPDY()) {
+    if (this.isSPDY) {
       iconPathParts.push('spdy');
-    } else if (this.servedOverH2()) {
+    } else if (this.isH2) {
       iconPathParts.push('h2');
     }
 
-    if (this.isv6IP()) {
+    if (this.isIPv6) {
       iconPathParts.push('ipv6');
     }
 
-    if (this.servedByRailgun()) {
+    if (this.isViaRailgun) {
       iconPathParts.push('rg');
     }
 
     return basePath + iconPathParts.join('-') + '.png';
   };
 
-  Request.prototype.setConnectionInfo = function (connectionInfo) {
+  Request.prototype.setConnectionInfo = mobx.action('setConnectionInfo', function (connectionInfo) {
     this.hasConnectionInfo = true;
     this.SPDY = connectionInfo.spdy;
     this.connectionType = connectionInfo.type;
-  };
+  });
 
   Request.prototype.setPageActionIconAndPopup = function () {
-    var iconPath = this.getPageActionPath();
-    var tabID = this.details.tabId;
+    var iconPath = this.pageActionIcon;
+    var tabID = this.tabId;
     chrome.pageAction.setIcon({
-      tabId: this.details.tabId,
+      tabId: this.tabId,
       path: iconPath
     }, function () {
       try {
@@ -269,20 +147,22 @@ define(['airports'], function (airports) {
   };
 
   Request.prototype.logToConsole = function () {
-    if (localStorage.getItem('debug_logging') !== 'yes') {
+    if (!window.optionsState.debug) {
       return;
     }
 
-    console.log('\n');
-    console.log(this.details.url, this.details.ip, 'CF - ' + this.servedByCloudFlare());
-    console.log('Request - ', this.details);
-    if (this.servedByCloudFlare()) {
-      console.log('Ray ID - ', this.getRayID());
+    console.groupCollapsed('request %s', this.id);
+    console.log('%c%s%c: %s', 'font-weight:bold', 'url', 'font-weight:normal', this.url);
+    console.log('%c%s%c: %s', 'font-weight:bold', 'ip', 'font-weight:normal', this.IP);
+    console.log('%c%s%c: %s', 'font-weight:bold', 'CloudFlare', 'font-weight:normal', this.isCloudFlare);
+    if (this.isCloudFlare) {
+      console.log('%c%s%c: %s', 'font-weight:bold', 'Ray ID', 'font-weight:normal', this.rayID);
+
+      if (this.isViaRailgun) {
+        this.railgun.logToConsole();
+      }
     }
-    if (this.servedByRailgun()) {
-      var railgunMetaData = this.getRailgunMetaData();
-      console.log('Railgun - ', railgunMetaData.id, railgunMetaData.messages.join('; '));
-    }
+    console.groupEnd('request %s', this.id);
   };
 
   return Request;
