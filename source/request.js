@@ -6,13 +6,12 @@ define(['airports', 'mobx', 'railgun'], function (airports, mobx, Railgun) {
   var Request = function (details) {
     this.id = details.requestId;
     this.fromCache = details.fromCache;
-    this.tabId = details.tabId;
     this.url = details.url;
     this.IP = details.ip;
 
     mobx.extendObservable(this, {
+      tabId: details.tabId,
       responseHeaders: details.responseHeaders,
-      hasConnectionInfo: false,
       SPDY: false,
       connectionType: null,
       headers: function () {
@@ -66,35 +65,6 @@ define(['airports', 'mobx', 'railgun'], function (airports, mobx, Railgun) {
     });
   };
 
-  Request.prototype.queryConnectionInfoAndSetIcon = function () {
-    var tabID = this.tabId;
-    if (this.hasConnectionInfo) {
-      this.setPageActionIconAndPopup();
-    } else {
-      var csMessageData = {
-        action: 'check_connection_info'
-      };
-      var csMessageCallback = function (csMsgResponse) {
-        // stop and return if we don't get a response, happens with hidden/background tabs
-        if (typeof csMsgResponse === 'undefined') {
-          return;
-        }
-
-        var request = window.requests.get(tabID);
-        request.setConnectionInfo(csMsgResponse);
-        request.setPageActionIconAndPopup();
-      };
-
-      try {
-        chrome.tabs.sendMessage(this.tabId, csMessageData, csMessageCallback);
-      } catch (e) {
-        console.log('caught exception when sending message to content script');
-        console.log(chrome.extension.lastError());
-        console.log(e);
-      }
-    }
-  };
-
   Request.prototype.getImagePath = function (basePath) {
     var iconPathParts = [];
 
@@ -122,29 +92,9 @@ define(['airports', 'mobx', 'railgun'], function (airports, mobx, Railgun) {
   };
 
   Request.prototype.setConnectionInfo = mobx.action('setConnectionInfo', function (connectionInfo) {
-    this.hasConnectionInfo = true;
     this.SPDY = connectionInfo.spdy;
     this.connectionType = connectionInfo.type;
   });
-
-  Request.prototype.setPageActionIconAndPopup = function () {
-    var iconPath = this.pageActionIcon;
-    var tabID = this.tabId;
-    chrome.pageAction.setIcon({
-      tabId: this.tabId,
-      path: iconPath
-    }, function () {
-      try {
-        chrome.pageAction.setPopup({
-          tabId: tabID,
-          popup: 'page-action-popup.html'
-        });
-        chrome.pageAction.show(tabID);
-      } catch (e) {
-        console.log('Exception on page action show for tab with ID: ', tabID, e);
-      }
-    });
-  };
 
   Request.prototype.logToConsole = function () {
     if (!window.optionsState.debug) {
