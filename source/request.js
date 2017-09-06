@@ -126,6 +126,14 @@ define(['./airports'], function (airports) {
         request.setPageActionIconAndPopup();
       };
 
+      if ('X-FIREFOX-SPDY' in this.headers && this.headers['X-FIREFOX-SPDY'] === 'h2') {
+        csMessageCallback({
+          spdy: true,
+          type: 'h2'
+        });
+        return;
+      }
+
       try {
         chrome.tabs.sendMessage(this.details.tabId, csMessageData, csMessageCallback);
       } catch (err) {

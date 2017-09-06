@@ -3,9 +3,15 @@ body {
   background: #ebebeb;
   color: #333;
   min-width: 250px;
+  overflow-x: hidden;
+  font-size: 12px;
 }
 
 ::selection {
+  background: rgba(255,121,0,0.2);
+}
+
+::-moz-selection {
   background: rgba(255,121,0,0.2);
 }
 
@@ -69,4 +75,9 @@ button.octicon {
 /* Hack */
 .claire-bg {
   background-color: #fff;
+}
+
+.claire-options-page {
+  background: transparent;
+  margin: 1.2em;
 }

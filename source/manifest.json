@@ -21,13 +21,18 @@
     "persistent": true
   },
   "page_action": {
-    "default_title": "Cloudflare"
+    "default_title": "Cloudflare",
+    "browser_style": false
   },
   "content_scripts": [{
     "matches": ["<all_urls>"],
     "js" : ["contentscript.js"],
     "run_at": "document_start"
   }],
-  "options_page": "options.html",
+  "options_ui": {
+    "page": "options.html",
+    "browser_style": true,
+    "chrome_style": true
+  },
   "content_security_policy": "object-src 'self'; script-src 'self' 'unsafe-eval';"
 }

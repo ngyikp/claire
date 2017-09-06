@@ -8,22 +8,15 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/pure/0.6.0/grids-responsive-min.css">
     <link rel="stylesheet" href="style.css">
   </head>
-  <body>
-    <section class="card">
-      <header class="card-header">
-        <h2 class="card-title">Claire Options</h2>
-      </header>
-      <section class="card-body">
-        <form class="pure-form pure-form-stacked">
-          <label for="claire_guide" class="pure-checkbox">
-            <input id="claire_guide" type="checkbox"> Hide Claire's icon guide
-          </label>
-          <label for="debug_log_checkbox" class="pure-checkbox">
-            <input id="debug_log_checkbox" type="checkbox"> Log debug messages to console
-          </label>
-        </form>
-      </section>
-    </section>
+  <body class="claire-options-page">
+    <form class="pure-form pure-form-stacked">
+      <label for="claire_guide" class="pure-checkbox">
+        <input id="claire_guide" type="checkbox"> Hide Claire's icon guide
+      </label>
+      <label for="debug_log_checkbox" class="pure-checkbox">
+        <input id="debug_log_checkbox" type="checkbox"> Log debug messages to console
+      </label>
+    </form>
     <script src="options.js" type="text/javascript" charset="utf-8"></script>
   </body>
 </html>

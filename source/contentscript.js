@@ -8,12 +8,15 @@ function determineConnectionInfo() {
   };
 }
 
-chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
-  if (request.action === 'check_connection_info') {
-    sendResponse(determineConnectionInfo());
-  }
-});
+// Only run on Chrome
+if (typeof chrome.loadTimes === 'function') {
+  chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
+    if (request.action === 'check_connection_info') {
+      sendResponse(determineConnectionInfo());
+    }
+  });
 
-// when executed, notify the extension about the connection info
-chrome.runtime.sendMessage(determineConnectionInfo(), function () {
-});
+  // when executed, notify the extension about the connection info
+  chrome.runtime.sendMessage(determineConnectionInfo(), function () {
+  });
+}
